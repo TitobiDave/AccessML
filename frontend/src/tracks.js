@@ -22,4 +22,11 @@ export const TRACKS = [
     { title: 'Sequences & attention', text: 'RNNs, attention and transformers.', icon: 'AudioLines', status: 'todo', go: 'lessons' },
     { title: 'Ship a model', text: 'Export, serve and monitor your trained network.', icon: 'Rocket', status: 'todo', go: 'playground' },
   ]},
+  { id: 'cutting-edge', name: 'Cutting-Edge AI', steps: [
+    { title: 'LLMs & Transformers', text: 'Understanding attention mechanisms, tokenization, and prompt engineering.', icon: 'BrainCircuit', status: 'todo', go: 'lessons' },
+    { title: 'RAG Workflows', text: 'Connecting LLMs to external data sources.', icon: 'FileSearch', status: 'todo', go: 'playground' },
+    { title: 'Edge AI & TinyML', text: 'Compiling and quantizing models to run efficiently on resource-constrained edge hardware and microcontrollers.', icon: 'Cpu', status: 'todo', go: 'lessons' },
+    { title: 'MLOps & Deployment', text: 'Tracking model experiments with MLflow, serializing models, and serving them as production-ready APIs using FastAPI.', icon: 'ServerCog', status: 'todo', go: 'lessons' },
+    { title: 'Get certified', text: 'Finish every course and claim your certificate.', icon: 'Award', status: 'todo', go: 'certificate' },
+  ]}
 ]
