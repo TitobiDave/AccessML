@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { BookOpen, Code2, SquareCheckBig, Award, Flame, Wand2, Brain } from 'lucide-react'
+import { BookOpen, Code2, SquareCheckBig, Award, Flame, Wand2, Brain, Route } from 'lucide-react'
+import Roadmap from './pages/Roadmap.jsx'
 import Lessons from './pages/Lessons.jsx'
 import Playground from './pages/Playground.jsx'
 import Quizzes from './pages/Quizzes.jsx'
 import Certificate from './pages/Certificate.jsx'
 
 const TABS = [
+  { id: 'roadmap', label: 'Roadmap', icon: Route, color: 'text-sky-400' },
   { id: 'lessons', label: 'Lessons', icon: BookOpen, color: 'text-emerald-400' },
   { id: 'playground', label: 'Playground', icon: Code2, color: 'text-slate-300' },
   { id: 'quizzes', label: 'Quizzes', icon: SquareCheckBig, color: 'text-amber-400' },
@@ -13,7 +15,7 @@ const TABS = [
 ]
 
 export default function App() {
-  const [tab, setTab] = useState('lessons')
+  const [tab, setTab] = useState('roadmap')
   const [progress] = useState(75)
 
   return (
@@ -25,7 +27,7 @@ export default function App() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight">AccessML</h1>
+              <h1 className="text-xl font-bold tracking-tight">ML CodeLab</h1>
               <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 ring-1 ring-emerald-500/30">QWEN 2.5</span>
             </div>
             <p className="text-xs text-slate-400">Free ML Powered by Open Weights</p>
@@ -68,6 +70,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-[1500px] px-6 py-8 lg:px-12">
+        {tab === 'roadmap' && <Roadmap go={setTab} />}
         {tab === 'lessons' && <Lessons goQuiz={() => setTab('quizzes')} goLab={() => setTab('playground')} />}
         {tab === 'playground' && <Playground />}
         {tab === 'quizzes' && <Quizzes />}
