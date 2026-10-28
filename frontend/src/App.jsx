@@ -1,3 +1,11 @@
+
+import AIMentor from './components/AIMentor'; // adjust path if needed
+import { useState } from 'react'
+import { BookOpen, Code2, SquareCheckBig, Award, Flame, Wand2, Brain } from 'lucide-react'
+import Lessons from './pages/Lessons.jsx'
+import Playground from './pages/Playground.jsx'
+import Quizzes from './pages/Quizzes.jsx'
+import Certificate from './pages/Certificate.jsx'
 import { useState } from "react";
 import {
   BookOpen,
@@ -15,6 +23,7 @@ import Playground from "./pages/Playground.jsx";
 import Quizzes from "./pages/Quizzes.jsx";
 import Certificate from "./pages/Certificate.jsx";
 import { TRACKS } from "./tracks.js";
+
 
 const TABS = [
   { id: "roadmap", label: "Roadmap", icon: Route, color: "text-sky-400" },
