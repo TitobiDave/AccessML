@@ -1,3 +1,4 @@
+import AIMentor from './components/AIMentor'; // adjust path if needed
 import { useState } from 'react'
 import { BookOpen, Code2, SquareCheckBig, Award, Flame, Wand2, Brain } from 'lucide-react'
 import Lessons from './pages/Lessons.jsx'
