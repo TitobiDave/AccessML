@@ -1,36 +1,78 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from config import settings
 from database import get_db
-from models import Module
+from models import Lesson, LessonProgress, Module, Quiz, QuizAttempt
 from routers.users import get_user_or_404
-from schemas import QuizOut, QuizResult, QuizSubmit
-from services.quiz_service import grade_and_record
+from schemas import QuestionResult, QuizListItem, QuizOut, QuizResult, QuizSubmit
+from services.progress_service import touch_streak
 
-router = APIRouter(prefix="/api/modules", tags=["quizzes"])
-
-
-def _module_with_quiz(db: Session, module_id: int) -> Module:
-    module = db.get(Module, module_id)
-    if not module or not module.questions:
-        raise HTTPException(404, "Quiz not found.")
-    return module
+router = APIRouter(prefix="/api", tags=["quizzes"])
 
 
-@router.get("/{module_id}/quiz", response_model=QuizOut)
-def get_quiz(module_id: int, db: Session = Depends(get_db)):
-    module = _module_with_quiz(db, module_id)
-    return QuizOut(
-        module_id=module.id,
-        title=f"{module.title.split(':')[0]} Checkpoint",
-        pass_ratio=settings.quiz_pass_ratio,
-        questions=module.questions,
+@router.get("/quizzes", response_model=list[QuizListItem])
+def list_quizzes(db: Session = Depends(get_db)):
+    quizzes = (
+        db.query(Quiz)
+        .join(Lesson, Quiz.lesson_id == Lesson.id)
+        .join(Module, Lesson.module_id == Module.id)
+        .order_by(Module.order, Lesson.order, Quiz.order)
+        .all()
     )
+    return [
+        QuizListItem(
+            id=q.id,
+            slug=q.slug,
+            title=q.title,
+            pass_ratio=q.pass_ratio,
+            question_count=q.question_count,
+            lesson_id=q.lesson_id,
+            lesson_number=q.lesson.number,
+            lesson_title=q.lesson.title,
+        )
+        for q in quizzes
+    ]
 
 
-@router.post("/{module_id}/quiz/submit", response_model=QuizResult)
-def submit_quiz(module_id: int, data: QuizSubmit, db: Session = Depends(get_db)):
-    module = _module_with_quiz(db, module_id)
-    user = get_user_or_404(db, data.user_id)
-    return grade_and_record(db, module, user, data.answers)
+@router.get("/quizzes/{quiz_id}", response_model=QuizOut)
+def read_quiz(quiz_id: int, db: Session = Depends(get_db)):
+    quiz = db.get(Quiz, quiz_id)
+    if not quiz:
+        raise HTTPException(404, "Quiz not found.")
+    return quiz
+
+
+@router.post("/quizzes/{quiz_id}/submit", response_model=QuizResult)
+def submit_quiz(quiz_id: int, body: QuizSubmit, db: Session = Depends(get_db)):
+    quiz = db.get(Quiz, quiz_id)
+    if not quiz:
+        raise HTTPException(404, "Quiz not found.")
+    user = get_user_or_404(db, body.user_id)
+
+    questions = quiz.questions
+    if len(body.answers) != len(questions):
+        raise HTTPException(422, "Provide one answer per question.")
+
+    results = [
+        QuestionResult(
+            question_id=q.id,
+            correct=(a == q.answer_index),
+            correct_index=q.answer_index,
+        )
+        for q, a in zip(questions, body.answers)
+    ]
+    score = sum(r.correct for r in results)
+    total = len(questions)
+    passed = total > 0 and score / total >= quiz.pass_ratio
+
+    db.add(QuizAttempt(user_id=user.id, quiz_id=quiz.id, score=score, total=total))
+
+    # Passing the quiz completes its lesson (idempotent)
+    if passed:
+        already = db.query(LessonProgress).filter_by(user_id=user.id, lesson_id=quiz.lesson_id).first()
+        if not already:
+            db.add(LessonProgress(user_id=user.id, lesson_id=quiz.lesson_id))
+        touch_streak(db, user)
+
+    db.commit()
+    return QuizResult(score=score, total=total, passed=passed, results=results)

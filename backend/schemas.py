@@ -84,7 +84,15 @@ class QuizResult(BaseModel):
     passed: bool
     results: list[QuestionResult]
 
-
+class QuizListItem(BaseModel):
+    id: int
+    slug: str
+    title: str
+    pass_ratio: float
+    question_count: int
+    lesson_id: int
+    lesson_number: str
+    lesson_title: str
 # ---- lessons ----
 class KeyComponent(BaseModel):
     term: str
