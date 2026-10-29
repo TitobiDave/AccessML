@@ -1,6 +1,6 @@
+import TutorPanel from './components/TutorPanel.jsx'
 import { useEffect, useState } from 'react'
 import { BookOpen, Code2, SquareCheckBig, Award, Flame, Wand2, Brain, Route } from 'lucide-react'
-import AIMentor from './components/AIMentor' // adjust path if needed
 import Lessons from './pages/Lessons.jsx'
 import Playground from './pages/Playground.jsx'
 import Quizzes from './pages/Quizzes.jsx'
@@ -28,6 +28,7 @@ export default function App() {
   const [quizId, setQuizId] = useState(null)
   const [labId, setLabId] = useState(null)
   const [progress, setProgress] = useState(null)
+  const [tutorOpen, setTutorOpen] = useState(false) // NEW
 
   // Load progress on start and again whenever the user returns to the roadmap
   useEffect(() => {
@@ -112,11 +113,16 @@ export default function App() {
               />
             </div>
           </div>
-          <button className="flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20">
+          <button
+            onClick={() => setTutorOpen((o) => !o)} // NEW
+            className="flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20"
+          >
             <Wand2 className="size-4" /> AI Tutor
           </button>
         </div>
       </header>
+
+      {tutorOpen && <TutorPanel onClose={() => setTutorOpen(false)} />} {/* NEW */}
 
       <main className="mx-auto max-w-[1500px] px-6 py-8 lg:px-12">
         {tab === 'roadmap' && <Roadmap go={go} completedIds={completedIds} />}

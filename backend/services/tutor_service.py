@@ -15,7 +15,6 @@ ASK_PROMPT = (
 
 
 async def chat(system: str, user: str) -> str:
-    print(settings.groq_api_key)
     if not settings.groq_api_key:
         raise HTTPException(503, "AI tutor is not configured. Set GROQ_API_KEY on the server.")
 
@@ -36,8 +35,15 @@ async def chat(system: str, user: str) -> str:
         raise HTTPException(502, "Could not reach the AI service.")
 
     if res.status_code != 200:
-        print(res.text)
-        raise HTTPException(502, f"AI service returned an error ({res.status_code}).")
+        try:
+            reason = res.json()["error"]["message"]
+        except (KeyError, TypeError, ValueError):
+            reason = "no details given"
+        raise HTTPException(
+            502,
+            f"AI service returned an error ({res.status_code}) using model "
+            f"'{settings.groq_model}': {reason}",
+        )
     try:
         return res.json()["choices"][0]["message"]["content"]
     except (KeyError, IndexError, ValueError):
