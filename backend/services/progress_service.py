@@ -1,51 +1,71 @@
-"""Progress percentage and learning-streak logic."""
+"""Progress calculations."""
 from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
-from config import settings
-from models import Lesson, LessonProgress, Module, QuizAttempt, User
+from models import Lab, LabProgress, Lesson, LessonProgress, Quiz, QuizAttempt, User
+from schemas import LabProgress as LabProgressOut
 from schemas import ProgressOut, QuizProgress
 
 
-def touch_streak(db: Session, user: User) -> None:
-    """Call whenever the learner does something meaningful. Extends/reset the daily streak."""
-    today = date.today()
-    if user.last_active == today:
-        return
-    user.streak_days = user.streak_days + 1 if user.last_active == today - timedelta(days=1) else 1
-    user.last_active = today
-    db.add(user)
-
-
 def quiz_progress(db: Session, user_id: int) -> list[QuizProgress]:
-    out = []
-    for module in db.query(Module).filter(Module.questions.any()).order_by(Module.order):
-        attempts = db.query(QuizAttempt).filter_by(user_id=user_id, module_id=module.id).all()
-        best = max(attempts, key=lambda a: a.score / a.total, default=None)
-        out.append(
+    results = []
+    for quiz in db.query(Quiz).order_by(Quiz.lesson_id, Quiz.order):
+        attempts = (
+            db.query(QuizAttempt)
+            .filter_by(user_id=user_id, quiz_id=quiz.id)
+            .all()
+        )
+        if not attempts:
+            continue
+        best = max(attempts, key=lambda a: a.score / a.total if a.total else 0)
+        passed = best.total > 0 and best.score / best.total >= quiz.pass_ratio
+        results.append(
             QuizProgress(
-                module_id=module.id,
-                best_score=best.score if best else 0,
-                total=best.total if best else len(module.questions),
-                passed=bool(best and best.score / best.total >= settings.quiz_pass_ratio),
+                quiz_id=quiz.id,
+                lesson_id=quiz.lesson_id,
+                best_score=best.score,
+                total=best.total,
+                passed=passed,
             )
         )
-    return out
+    return results
+
+
+def lab_progress(db: Session, user_id: int) -> list[LabProgressOut]:
+    done = {
+        row.lab_id
+        for row in db.query(LabProgress).filter_by(user_id=user_id)
+    }
+    return [
+        LabProgressOut(lab_id=lab.id, lesson_id=lab.lesson_id, completed=lab.id in done)
+        for lab in db.query(Lab).order_by(Lab.lesson_id, Lab.order)
+    ]
 
 
 def compute_progress(db: Session, user: User) -> ProgressOut:
-    """Progress = (completed lessons + passed quizzes) / (all lessons + all quizzes)."""
     completed = [
-        row.lesson_id for row in db.query(LessonProgress).filter_by(user_id=user.id).order_by(LessonProgress.id)
+        row.lesson_id
+        for row in db.query(LessonProgress).filter_by(user_id=user.id)
     ]
-    quizzes = quiz_progress(db, user.id)
-    total_items = db.query(Lesson).count() + len(quizzes)
-    done_items = len(completed) + sum(q.passed for q in quizzes)
-    percent = round(100 * done_items / total_items) if total_items else 0
+    total_lessons = db.query(Lesson).count()
+    percent = round(len(completed) / total_lessons * 100) if total_lessons else 0
+
     return ProgressOut(
         percent=percent,
         streak_days=user.streak_days,
         completed_lesson_ids=completed,
-        quizzes=quizzes,
+        quizzes=quiz_progress(db, user.id),
+        labs=lab_progress(db, user.id),
     )
+
+
+def touch_streak(db: Session, user: User) -> None:
+    today = date.today()
+    if user.last_active == today:
+        return
+    if user.last_active == today - timedelta(days=1):
+        user.streak_days += 1
+    else:
+        user.streak_days = 1
+    user.last_active = today
