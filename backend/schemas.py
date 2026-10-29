@@ -30,17 +30,30 @@ class KeyComponent(BaseModel):
 class LabSummary(ORM):
     id: int
     slug: str
+    section_slug: str
     title: str
-    difficulty: str          # "beginner" | "intermediate" | "advanced"
+    difficulty: str
     estimated_minutes: int
 
 
 class LabOut(LabSummary):
     lesson_id: int
-    instructions: str        # markdown
+    instructions: str
     starter_code: str
     hints: list[str] = []
-    # note: no solution here, same idea as quiz answers
+    # no solution, expected_output or checks here
+
+
+class LabSubmit(BaseModel):
+    user_id: int
+    code: str = Field(min_length=1, max_length=20_000)
+    output: str = Field(default="", max_length=10_000)
+
+
+class LabResult(BaseModel):
+    passed: bool
+    message: str
+    lesson_completed: bool = False
 
 
 # ---- quizzes ----
@@ -124,7 +137,7 @@ class LessonOut(LessonSummary):
     module_id: int
     content: LessonContent
     quizzes: list[QuizSummary] = []
-    labs: list[LabSummary] = []
+    labs: list[LabOut] = []
 
 
 class ModuleOut(ORM):

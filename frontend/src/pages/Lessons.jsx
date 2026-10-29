@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
-  Clock, Terminal, ArrowRight, ArrowLeft, ChevronRight, ChevronLeft,
-  FlaskConical, ListChecks, Sigma, Lightbulb, Check, List,
+  Clock, ArrowRight, ArrowLeft, ChevronRight, ChevronLeft,
+  ListChecks, Sigma, Lightbulb, Check, List, Lock,
 } from 'lucide-react'
+import SectionLab from '../components/SectionLab.jsx'
+import { USER_ID, completeLesson, fetchProgress } from '../progress.js'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -19,12 +22,6 @@ function formatMinutes(totalSeconds) {
   return `${Math.max(1, Math.round(totalSeconds / 60))} min`
 }
 
-const DIFFICULTY = {
-  beginner: 'text-emerald-400 bg-emerald-500/10 ring-emerald-500/30',
-  intermediate: 'text-amber-400 bg-amber-500/10 ring-amber-500/30',
-  advanced: 'text-rose-400 bg-rose-500/10 ring-rose-500/30',
-}
-
 // Styles for rendered markdown (Tailwind preflight strips defaults)
 const PROSE = [
   'text-[16px] leading-8 text-slate-300',
@@ -38,15 +35,20 @@ const PROSE = [
   '[&_code]:rounded [&_code]:bg-ink [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[14px] [&_code]:text-emerald-400',
   '[&_pre]:my-5 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-edge [&_pre]:bg-ink [&_pre]:p-4',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-slate-200',
+  '[&_table]:my-5 [&_table]:w-full [&_table]:text-left [&_table]:text-sm [&_th]:border-b [&_th]:border-edge [&_th]:px-3 [&_th]:py-2 [&_th]:text-slate-400 [&_td]:border-b [&_td]:border-edge/60 [&_td]:px-3 [&_td]:py-2',
 ].join(' ')
 
-export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 }) {
+export default function Lessons({ goQuiz, onPrev, onNext, onFinish, lessonId = 1 }) {
   const [lesson, setLesson] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
   const [visited, setVisited] = useState(() => new Set([0]))
+  const [passed, setPassed] = useState(() => new Set()) // ids of labs this user has passed
+  const [progressReady, setProgressReady] = useState(false)
+  const [finishing, setFinishing] = useState(false)
 
+  // Load the lesson
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
@@ -74,8 +76,38 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
     return () => controller.abort()
   }, [lessonId])
 
+  // Load which labs this user has already passed
+  useEffect(() => {
+    const controller = new AbortController()
+    setProgressReady(false)
+    fetchProgress(USER_ID, controller.signal)
+      .then((p) => {
+        setPassed(new Set((p.labs ?? []).filter((l) => l.completed).map((l) => l.lab_id)))
+        setProgressReady(true)
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') setProgressReady(true) // fail open: start with nothing passed
+      })
+    return () => controller.abort()
+  }, [lessonId])
+
   const sections = lesson?.content?.sections ?? []
+  const labs = lesson?.labs ?? []
   const total = sections.length
+
+  // A section is unlocked-past when it has no lab, or its lab is passed
+  const labFor = (s) => labs.find((l) => l.section_slug === s?.slug)
+  const sectionPassed = (s) => {
+    const l = labFor(s)
+    return !l || passed.has(l.id)
+  }
+  const firstLocked = sections.findIndex((s) => !sectionPassed(s))
+  const maxReachable = firstLocked === -1 ? Math.max(total - 1, 0) : firstLocked
+
+  // If the page is ahead of the user's progress (e.g. a #hash link), pull them back
+  useEffect(() => {
+    if (progressReady && total && page > maxReachable) setPage(maxReachable)
+  }, [progressReady, maxReachable, total]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to top and sync the hash whenever the page changes
   useEffect(() => {
@@ -87,20 +119,34 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
   if (loading) return <p className="text-slate-400">Loading lesson...</p>
   if (error) return <p className="text-red-400">{error}</p>
 
-  const { content, quizzes = [], labs = [] } = lesson
+  const { content, quizzes = [] } = lesson
   const section = sections[page]
+  const lab = labFor(section)
+  const locked = !sectionPassed(section)
   const isFirst = page === 0
   const isLast = page >= total - 1
   const progress = total ? Math.round(((page + 1) / total) * 100) : 100
+  const nextLabel = isLast ? (onNext ? 'Complete & next lesson' : 'Complete lesson') : 'Next'
 
   const goTo = (i) => {
-    const next = Math.min(Math.max(i, 0), total - 1)
+    const next = Math.min(Math.max(i, 0), Math.min(total - 1, maxReachable))
     setPage(next)
     setVisited((prev) => new Set(prev).add(next))
   }
 
   const handleBack = () => (isFirst ? onPrev?.() : goTo(page - 1))
-  const handleNext = () => (isLast ? onNext?.() : goTo(page + 1))
+
+  const handleNext = async () => {
+    if (!isLast) return goTo(page + 1)
+    setFinishing(true)
+    try {
+      await completeLesson(lesson.id) // idempotent
+    } catch (err) {
+      console.error('Could not save progress', err)
+    }
+    setFinishing(false)
+    ;(onNext ?? onFinish)?.()
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-6rem)] flex-col">
@@ -141,11 +187,11 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
       </header>
 
       <div className="grid flex-1 gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Reading column: one section per page */}
+        {/* Reading column: one section (and its lab) per page */}
         <article className="min-w-0">
           {isFirst && content.intro && (
             <div className={`${PROSE} mb-8 rounded-xl border border-edge bg-panel px-5 py-1`}>
-              <ReactMarkdown>{content.intro}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content.intro}</ReactMarkdown>
             </div>
           )}
 
@@ -159,7 +205,7 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
               </h2>
 
               <div className={`${PROSE} mt-4`}>
-                <ReactMarkdown>{section.body}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.body}</ReactMarkdown>
               </div>
 
               {section.formula && (
@@ -191,6 +237,15 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
                   </ul>
                 </div>
               )}
+
+              {lab && (
+                <SectionLab
+                  key={lab.id}
+                  lab={lab}
+                  passed={passed.has(lab.id)}
+                  onPassed={() => setPassed((prev) => new Set(prev).add(lab.id))}
+                />
+              )}
             </section>
           )}
 
@@ -211,13 +266,16 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
               <ol className="mt-3 space-y-1">
                 {sections.map((s, i) => {
                   const active = i === page
-                  const done = visited.has(i) && !active
+                  const lockedItem = i > maxReachable
+                  const sLab = labFor(s)
+                  const done = !active && !lockedItem && (sLab ? passed.has(sLab.id) : visited.has(i))
                   return (
                     <li key={s.slug}>
                       <button
                         onClick={() => goTo(i)}
+                        disabled={lockedItem}
                         aria-current={active ? 'step' : undefined}
-                        className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition ${
+                        className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
                           active
                             ? 'bg-emerald-500/10 font-semibold text-emerald-300'
                             : 'text-slate-400 hover:bg-ink/60 hover:text-white'
@@ -232,7 +290,7 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
                               : 'bg-ink text-slate-500 ring-1 ring-edge'
                           }`}
                         >
-                          {done ? <Check className="size-3.5" /> : i + 1}
+                          {lockedItem ? <Lock className="size-3.5" /> : done ? <Check className="size-3.5" /> : i + 1}
                         </span>
                         {s.title}
                       </button>
@@ -243,7 +301,7 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
             </section>
           )}
 
-          {content.badges.length > 0 && (
+          {content.badges?.length > 0 && (
             <section className="rounded-2xl border border-edge bg-panel p-5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">In this lesson</h3>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -256,39 +314,6 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
                   </span>
                 ))}
               </div>
-            </section>
-          )}
-
-          {labs.length > 0 && (
-            <section className="rounded-2xl border border-edge bg-panel p-5">
-              <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                <FlaskConical className="size-4 text-emerald-400" /> Code labs
-              </h3>
-              <ul className="mt-3 space-y-2">
-                {labs.map((lab) => (
-                  <li key={lab.id}>
-                    <button
-                      onClick={() => goLab?.(lab.id)}
-                      className="group flex w-full items-center justify-between gap-3 rounded-lg border border-edge bg-ink/60 px-3 py-2.5 text-left hover:border-emerald-500/50"
-                    >
-                      <span>
-                        <span className="block text-sm font-semibold text-white">{lab.title}</span>
-                        <span className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                          <span
-                            className={`rounded px-1.5 py-0.5 font-semibold capitalize ring-1 ${
-                              DIFFICULTY[lab.difficulty] ?? DIFFICULTY.beginner
-                            }`}
-                          >
-                            {lab.difficulty}
-                          </span>
-                          {lab.estimated_minutes} min
-                        </span>
-                      </span>
-                      <Terminal className="size-4 shrink-0 text-slate-500 group-hover:text-emerald-400" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
             </section>
           )}
 
@@ -343,9 +368,10 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
               <button
                 key={s.slug}
                 onClick={() => goTo(i)}
+                disabled={i > maxReachable}
                 aria-label={`Go to section ${i + 1}: ${s.title}`}
                 aria-current={i === page ? 'page' : undefined}
-                className={`grid size-8 place-items-center rounded-md text-sm font-semibold transition ${
+                className={`grid size-8 place-items-center rounded-md text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-30 ${
                   i === page
                     ? 'bg-emerald-500 text-ink'
                     : 'text-slate-400 hover:bg-panel hover:text-white'
@@ -356,7 +382,7 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
             ))}
             <button
               onClick={() => goTo(page + 1)}
-              disabled={isLast}
+              disabled={isLast || page >= maxReachable}
               aria-label="Next section"
               className="grid size-8 place-items-center rounded-md text-slate-400 hover:text-white disabled:opacity-30"
             >
@@ -366,20 +392,22 @@ export default function Lessons({ goQuiz, goLab, onPrev, onNext, lessonId = 1 })
         )}
 
         <div className="flex items-center gap-3">
+          {locked && <span className="text-xs text-amber-400">Pass the lab to continue</span>}
           {isLast && quizzes[0] && (
             <button
               onClick={() => goQuiz?.(quizzes[0].id)}
-              className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"
+              disabled={locked}
+              className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40"
             >
               Take quiz
             </button>
           )}
           <button
             onClick={handleNext}
-            disabled={isLast && !onNext}
+            disabled={locked || finishing}
             className="flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2 text-sm font-bold text-ink hover:bg-emerald-400 disabled:opacity-40"
           >
-            {isLast ? 'Next lesson' : 'Next'} <ArrowRight className="size-4" />
+            {nextLabel} <ArrowRight className="size-4" />
           </button>
         </div>
       </footer>
