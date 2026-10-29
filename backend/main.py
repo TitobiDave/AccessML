@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import models  # noqa: F401  (registers tables on Base)
 from config import settings
 from database import Base, SessionLocal, engine
-from routers import certificates, lessons, progress, quizzes, tutor, users
+from routers import certificates, lessons, progress, quizzes, tutor, users,lab
 from seed_data import seed
 
 
@@ -28,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (users, lessons, quizzes, progress, certificates, tutor):
+for r in (users, lessons, quizzes, progress, certificates, tutor,lab):
     app.include_router(r.router)
 
 

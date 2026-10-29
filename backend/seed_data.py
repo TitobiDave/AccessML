@@ -5,7 +5,135 @@ from models import Lab, Lesson, Module, Quiz, QuizQuestion, User
 
 
 # ---------------------------------------------------------------- sections
-
+# One lab per section. section_slug must match a section slug in the lesson content.
+LAB_SPECS = [
+    dict(
+        slug="lab-variables", section_slug="variables", title="Create and print variables",
+        instructions=(
+            "Create two more variables: `height` set to `1.68` and `is_student` set to `True`.\n\n"
+            "Then print one line using an **f-string** so the output is exactly:\n\n"
+            "```text\nAda is 36 and 1.68m tall\n```"
+        ),
+        starter_code='name = "Ada"\nage = 36\n# TODO: create height and is_student\n# TODO: print the sentence with an f-string\n',
+        solution_code='name = "Ada"\nage = 36\nheight = 1.68\nis_student = True\nprint(f"{name} is {age} and {height}m tall")\n',
+        expected_output="Ada is 36 and 1.68m tall",
+        required_code=["height", "is_student"],
+        hints=["An f-string starts with f before the quote: f\"{name} ...\""],
+    ),
+    dict(
+        slug="lab-operators", section_slug="operators", title="Split seconds into h:m:s",
+        instructions=(
+            "`total_seconds` is `3725`. Use `//` and `%` to work out the hours, minutes and seconds, "
+            "then print them on one line separated by spaces.\n\n```text\n1 2 5\n```"
+        ),
+        starter_code="total_seconds = 3725\n# TODO: hours, minutes, seconds\n",
+        solution_code=(
+            "total_seconds = 3725\nhours = total_seconds // 3600\nremaining = total_seconds % 3600\n"
+            "minutes = remaining // 60\nseconds = remaining % 60\nprint(hours, minutes, seconds)\n"
+        ),
+        expected_output="1 2 5",
+        required_code=["//", "%"],
+        hints=["There are 3600 seconds in an hour. `%` gives what's left over.", "Repeat the same idea with 60 for minutes."],
+    ),
+    dict(
+        slug="lab-strings", section_slug="strings", title="Clean up an email address",
+        instructions=(
+            "Clean `email` with `strip()` and `lower()`, split it at `@`, then print the username and "
+            "the domain on separate lines.\n\n```text\nada.lovelace\nexample.com\n```"
+        ),
+        starter_code='email = "  Ada.Lovelace@Example.com  "\n# TODO: clean, split, print\n',
+        solution_code='email = "  Ada.Lovelace@Example.com  "\nclean = email.strip().lower()\nusername, domain = clean.split("@")\nprint(username)\nprint(domain)\n',
+        expected_output="ada.lovelace\nexample.com",
+        required_code=["strip", "split"],
+        hints=['"a@b".split("@") gives ["a", "b"]. You can unpack it into two names.'],
+    ),
+    dict(
+        slug="lab-collections", section_slug="collections", title="Update a dictionary",
+        instructions=(
+            "1. Add `\"Chioma\": 95` to `lookup`.\n2. Change Tunde's score to `75`.\n"
+            "3. Print Tunde's score.\n4. Print the score for `\"Emeka\"` using `.get()` with the fallback `\"n/a\"`.\n"
+            "5. Print how many students are in `lookup`.\n\n```text\n75\nn/a\n3\n```"
+        ),
+        starter_code='lookup = {"Ada": 88, "Tunde": 72}\n# TODO\n',
+        solution_code='lookup = {"Ada": 88, "Tunde": 72}\nlookup["Chioma"] = 95\nlookup["Tunde"] = 75\nprint(lookup["Tunde"])\nprint(lookup.get("Emeka", "n/a"))\nprint(len(lookup))\n',
+        expected_output="75\nn/a\n3",
+        required_code=[".get("],
+        hints=["Assigning to a new key adds it; assigning to an existing key updates it."],
+    ),
+    dict(
+        slug="lab-conditionals", section_slug="conditionals", title="Grade a score",
+        instructions=(
+            "Using `if` / `elif` / `else`, print `A` for 90+, `B` for 80-89, `C` for 70-79 and `F` below 70.\n\n"
+            "With `score = 82` the output must be:\n\n```text\nB\n```\n\n"
+            "Try `95` and `50` yourself first, then set it back to `82` before checking."
+        ),
+        starter_code="score = 82\n# TODO\n",
+        solution_code='score = 82\nif score >= 90:\n    print("A")\nelif score >= 80:\n    print("B")\nelif score >= 70:\n    print("C")\nelse:\n    print("F")\n',
+        expected_output="B",
+        required_code=["elif"],
+        hints=["Check the highest threshold first."],
+    ),
+    dict(
+        slug="lab-loops", section_slug="loops", title="Count passes and find the best",
+        instructions=(
+            "Loop over `scores` once. Count how many are 70 or more, and track the highest score. "
+            "Don't use `max()`.\n\n```text\nPasses: 3\nHighest: 95\n```"
+        ),
+        starter_code="scores = [72, 88, 95, 60]\n# TODO: set up counters before the loop\n",
+        solution_code='scores = [72, 88, 95, 60]\npasses = 0\nbest = scores[0]\nfor s in scores:\n    if s >= 70:\n        passes += 1\n    if s > best:\n        best = s\nprint(f"Passes: {passes}")\nprint(f"Highest: {best}")\n',
+        expected_output="Passes: 3\nHighest: 95",
+        required_code=["for"], forbidden_code=["max("],
+        hints=["Set `passes = 0` and `best = scores[0]` before the loop."],
+    ),
+    dict(
+        slug="lab-functions", section_slug="functions", title="Write average()",
+        instructions=(
+            "Write `average(numbers)` that **returns** the mean. If the list is empty, return `0` instead of crashing.\n\n"
+            "```text\n78.75\n0\n```"
+        ),
+        starter_code="# TODO: def average(numbers): ...\n\nprint(average([72, 88, 95, 60]))\nprint(average([]))\n",
+        solution_code="def average(numbers):\n    if not numbers:\n        return 0\n    return sum(numbers) / len(numbers)\n\nprint(average([72, 88, 95, 60]))\nprint(average([]))\n",
+        expected_output="78.75\n0",
+        required_code=["def average", "return"],
+        hints=["An empty list is falsy, so `if not numbers:` catches it."],
+    ),
+    dict(
+        slug="lab-scope", section_slug="scope", title="Fix the mutable default",
+        instructions=(
+            "`add_item` shares one list between calls. Fix it with the `None` pattern so each call starts fresh.\n\n"
+            "```text\n['a']\n['b']\n```"
+        ),
+        starter_code='def add_item(item, items=[]):\n    items.append(item)\n    return items\n\nprint(add_item("a"))\nprint(add_item("b"))\n',
+        solution_code='def add_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n\nprint(add_item("a"))\nprint(add_item("b"))\n',
+        expected_output="['a']\n['b']",
+        required_code=["None"], forbidden_code=["items=[]"],
+        hints=["Default to None, then create the list inside the function."],
+    ),
+    dict(
+        slug="lab-errors", section_slug="reading-errors", title="Fix two errors",
+        instructions=(
+            "This program has **two** bugs. Run it, read the traceback from the bottom, fix the first error, "
+            "run again, and fix the second. Don't hardcode the answer.\n\n```text\nTotal: 255\nLast: 95\n```"
+        ),
+        starter_code='scores = [72, 88, 95]\ntotal = 0\nfor score in scores:\n    total = total + scor\nprint("Total:", total)\nprint("Last:", scores[3])\n',
+        solution_code='scores = [72, 88, 95]\ntotal = 0\nfor score in scores:\n    total = total + score\nprint("Total:", total)\nprint("Last:", scores[-1])\n',
+        expected_output="Total: 255\nLast: 95",
+        forbidden_code=["255"],
+        hints=["The first error is a NameError: compare the name to the loop variable.", "The second is an IndexError: a list of 3 items ends at index 2, or use -1."],
+    ),
+    dict(
+        slug="lab-debugging", section_slug="debugging", title="Debug average()",
+        instructions=(
+            "`average` returns the wrong number and the `assert` fails. Use print debugging to find out why, "
+            "fix the function, and keep the `assert` in place.\n\n```text\n4.0\n```"
+        ),
+        starter_code="def average(numbers):\n    total = 0\n    for n in numbers:\n        total = n\n    return total / len(numbers)\n\nprint(average([2, 4, 6]))\nassert average([2, 4, 6]) == 4\n",
+        solution_code="def average(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n    return total / len(numbers)\n\nprint(average([2, 4, 6]))\nassert average([2, 4, 6]) == 4\n",
+        expected_output="4.0",
+        required_code=["assert"],
+        hints=["Print `total` inside the loop. Is it growing?", "`total = n` replaces the total each time instead of adding to it."],
+    ),
+]
 VARIABLES_BODY = r"""
 A **variable** is a name that points to a value stored in memory. You create one by assigning with `=`. Python works out the type from the value, so you never declare it.
 
@@ -1326,39 +1454,7 @@ def seed(db: Session) -> None:
                 ],
             )
         ],
-        labs=[
-            Lab(
-                slug="fix-and-extend-score-calculator",
-                title="Fix and extend a score calculator",
-                difficulty="beginner",
-                estimated_minutes=25,
-                order=1,
-                instructions=LAB1_INSTRUCTIONS,
-                starter_code=LAB1_STARTER,
-                solution_code=LAB1_SOLUTION,
-                hints=[
-                    "The error names the variable Python couldn't find. Compare it to the loop variable.",
-                    "For highest(), start with best = scores[0] and update it when you see a bigger score.",
-                    "In grade(), check the highest threshold first and use elif for the rest.",
-                    "zip(names, scores) lets you loop over both lists together.",
-                ],
-            ),
-            Lab(
-                slug="debug-three-broken-programs",
-                title="Debug three broken programs",
-                difficulty="intermediate",
-                estimated_minutes=20,
-                order=2,
-                instructions=LAB2_INSTRUCTIONS,
-                starter_code=LAB2_STARTER,
-                solution_code=LAB2_SOLUTION,
-                hints=[
-                    "A SyntaxError often means something is missing at the end of the line it points to. What does every def need?",
-                    "dict.get(key, default) returns the default instead of raising an error.",
-                    "input() returns text. Convert it with int() before doing maths.",
-                ],
-            ),
-        ],
+        labs=[Lab(order=i, **spec) for i, spec in enumerate(LAB_SPECS, start=1)],
     )
 
     module.lessons.append(lesson)
