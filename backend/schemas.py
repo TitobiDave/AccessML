@@ -26,43 +26,42 @@ class KeyComponent(BaseModel):
     description: str
 
 
-class LessonContent(BaseModel):
-    summary: str
-    formula: str | None = None
-    key_components: list[KeyComponent] = []
-    closing: str | None = None
-    badges: list[str] = []
-
-
-class LessonSummary(ORM):
+# ---- labs ----
+class LabSummary(ORM):
     id: int
-    number: str
+    slug: str
     title: str
-    topic: str
-    duration_seconds: int
+    difficulty: str          # "beginner" | "intermediate" | "advanced"
+    estimated_minutes: int
 
 
-class LessonOut(LessonSummary):
-    module_id: int
-    video_url: str | None
-    content: LessonContent
-
-
-class ModuleOut(ORM):
-    id: int
-    title: str
-    lessons: list[LessonSummary]
+class LabOut(LabSummary):
+    lesson_id: int
+    instructions: str        # markdown
+    starter_code: str
+    hints: list[str] = []
+    # note: no solution here, same idea as quiz answers
 
 
 # ---- quizzes ----
 class QuestionOut(ORM):
     id: int
     prompt: str
-    options: list[str]  # note: no answer here
+    options: list[str]       # note: no answer here
 
 
-class QuizOut(BaseModel):
-    module_id: int
+class QuizSummary(ORM):
+    id: int
+    slug: str
+    title: str
+    pass_ratio: float
+    question_count: int
+
+
+class QuizOut(ORM):
+    id: int
+    slug: str
+    lesson_id: int
     title: str
     pass_ratio: float
     questions: list[QuestionOut]
@@ -70,7 +69,7 @@ class QuizOut(BaseModel):
 
 class QuizSubmit(BaseModel):
     user_id: int
-    answers: list[int | None]  # one entry per question, in order; null = skipped
+    answers: list[int | None]   # one per question, in order; null = skipped
 
 
 class QuestionResult(BaseModel):
@@ -86,12 +85,60 @@ class QuizResult(BaseModel):
     results: list[QuestionResult]
 
 
+# ---- lessons ----
+class KeyComponent(BaseModel):
+    term: str
+    description: str
+
+class LessonSection(BaseModel):
+    slug: str                       # unique within the lesson, used for anchors (#cost-function)
+    title: str
+    body: str                       # markdown
+    formula: str | None = None
+    key_components: list[KeyComponent] = []
+class LessonContent(BaseModel):
+    sections: list[LessonSection] = []
+    formula: str | None = None
+    key_components: list[KeyComponent] = []
+    closing: str | None = None
+    badges: list[str] = []
+
+class LessonSummary(ORM):
+    id: int
+    slug: str
+    number: str
+    title: str
+    topic: str
+    duration_seconds: int
+
+
+class LessonOut(LessonSummary):
+    module_id: int
+    content: LessonContent
+    quizzes: list[QuizSummary] = []
+    labs: list[LabSummary] = []
+
+
+class ModuleOut(ORM):
+    id: int
+    slug: str
+    title: str
+    lessons: list[LessonSummary]
+
+
 # ---- progress ----
 class QuizProgress(BaseModel):
-    module_id: int
+    quiz_id: int
+    lesson_id: int
     best_score: int
     total: int
     passed: bool
+
+
+class LabProgress(BaseModel):
+    lab_id: int
+    lesson_id: int
+    completed: bool
 
 
 class ProgressOut(BaseModel):
@@ -99,7 +146,7 @@ class ProgressOut(BaseModel):
     streak_days: int
     completed_lesson_ids: list[int]
     quizzes: list[QuizProgress]
-
+    labs: list[LabProgress]
 
 # ---- certificates ----
 class CertificateCreate(BaseModel):

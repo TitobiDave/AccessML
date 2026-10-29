@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { TRACKS } from '../tracks.js'
+import { withStatus } from '../progress.js'
 import { Terminal, Grid3x3, Table2, BarChart3, ListChecks, Tags, TrendingUp, TrendingDown, Split, Gauge, Award, Network, Waypoints, Layers, AudioLines, Rocket, BrainCircuit, FileSearch, Cpu, ServerCog, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const ICONS = { Terminal, Grid3x3, Table2, BarChart3, ListChecks, Tags, TrendingUp, TrendingDown, Split, Gauge, Award, Network, Waypoints, Layers, AudioLines, Rocket, BrainCircuit, FileSearch, Cpu, ServerCog }
-const OFFSETS = [-50, 0, 50, 0]      // zigzag: up, middle, down, middle
-const COL = 140, LEFT = 90, SIZE = 88, H = 420, TRACK_GAP = 3   // gap between tracks, in columns
-const FLOORS = ['#222a33', '#2b2a22', '#2a2231']                // floor tint per track
+const OFFSETS = [-50, 0, 50, 0]
+const COL = 140, LEFT = 90, SIZE = 88, H = 420, TRACK_GAP = 3
+const FLOORS = ['#222a33', '#2b2a22', '#2a2231']
 const STYLE = {
   done:    { face: '#5c8f35', edge: '#3b6122', icon: 'rgba(12,30,6,.5)',      label: 'Completed' },
   current: { face: '#464841', edge: '#2f312c', icon: 'rgba(255,255,255,.55)', label: 'Next lesson' },
@@ -14,48 +15,64 @@ const STYLE = {
 const diamond = { transform: 'translate(-50%,-50%) scaleY(.58) rotate(45deg)', width: SIZE, height: SIZE }
 const floorTile = { width: 150, height: 150, transform: 'translate(-50%,-50%) scaleY(.58) rotate(45deg)' }
 
+const countDone = (steps) => steps.filter((s) => s.status === 'done').length
+
 // Lay every track end to end on one long strip, with a divider gap between tracks
-let col = 0
-const labels = [], items = [], dividers = []
-TRACKS.forEach((t, ti) => {
-  const done = t.steps.filter((s) => s.status === 'done').length
-  const startCol = col
-  t.steps.forEach((s, si) => items.push({ ...s, key: `${t.id}-${si}`, x: LEFT + col++ * COL, off: OFFSETS[si % 4], floor: FLOORS[ti % 3] }))
-  labels.push({ id: t.id, name: t.name, n: ti + 1, x: LEFT + startCol * COL, done, total: t.steps.length })
-  if (ti < TRACKS.length - 1) {
-    const next = TRACKS[ti + 1]
-    dividers.push({
-      id: `${t.id}-divider`,
-      name: next.name,
-      done: next.steps.filter((s) => s.status === 'done').length,
-      total: next.steps.length,
-      tint: FLOORS[(ti + 1) % 3],
-      x: LEFT + (col + (TRACK_GAP - 1) / 2) * COL,
-      tiles: Array.from({ length: TRACK_GAP }, (_, k) => LEFT + (col + k) * COL),
-    })
-    col += TRACK_GAP
-  }
-})
-const WIDTH = LEFT + (col + 0.5) * COL
-const totalDone = labels.reduce((a, l) => a + l.done, 0)
-const total = items.length
+function buildLayout(tracks) {
+  let col = 0
+  const labels = [], items = [], dividers = []
+  tracks.forEach((t, ti) => {
+    const startCol = col
+    t.steps.forEach((s, si) =>
+      items.push({ ...s, key: `${t.id}-${si}`, x: LEFT + col++ * COL, off: OFFSETS[si % 4], floor: FLOORS[ti % 3] }))
+    labels.push({ id: t.id, name: t.name, n: ti + 1, x: LEFT + startCol * COL, done: countDone(t.steps), total: t.steps.length })
+    if (ti < tracks.length - 1) {
+      const next = tracks[ti + 1]
+      dividers.push({
+        id: `${t.id}-divider`,
+        name: next.name,
+        done: countDone(next.steps),
+        total: next.steps.length,
+        tint: FLOORS[(ti + 1) % 3],
+        x: LEFT + (col + (TRACK_GAP - 1) / 2) * COL,
+        tiles: Array.from({ length: TRACK_GAP }, (_, k) => LEFT + (col + k) * COL),
+      })
+      col += TRACK_GAP
+    }
+  })
+  return { labels, items, dividers, width: LEFT + (col + 0.5) * COL }
+}
 
 const rowTop = (off) => `calc(50% + ${off + 14}px)`
 
-export default function Roadmap({ go, setProgress }) {
-  
+// Lesson tiles need a lessonId; other tiles (quizzes, certificate) always work
+const isLinked = (s) => s.go !== 'lessons' || s.lessonId != null
+
+export default function Roadmap({ go, completedIds = [] }) {
   const scroller = useRef(null)
   const drag = useRef({ down: false, x: 0, left: 0, moved: false })
+
+  const { labels, items, dividers, width } = useMemo(
+    () => buildLayout(withStatus(TRACKS, completedIds)),
+    [completedIds],
+  )
+  const totalDone = labels.reduce((a, l) => a + l.done, 0)
+  const total = items.length
+  const currentKey = items.find((s) => s.status === 'current')?.key
 
   const jump = (x) => scroller.current?.scrollTo({ left: Math.max(0, x - 70), behavior: 'smooth' })
   const nudge = (dir) => scroller.current?.scrollBy({ left: dir * 520, behavior: 'smooth' })
 
+  // open on the next lesson, and re-centre if it changes after progress loads
   useEffect(() => {
     const el = scroller.current
-    // open on the next lesson
-    const cur = items.find((s) => s.status === 'current')
+    const cur = items.find((s) => s.key === currentKey)
     if (cur) el.scrollLeft = cur.x - el.clientWidth / 2
-    // mouse wheel scrolls sideways (lets the page scroll again once you hit either end)
+  }, [currentKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // mouse wheel scrolls sideways (lets the page scroll again once you hit either end)
+  useEffect(() => {
+    const el = scroller.current
     const onWheel = (e) => {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
       const atStart = el.scrollLeft <= 0 && e.deltaY < 0
@@ -107,15 +124,13 @@ export default function Roadmap({ go, setProgress }) {
           [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-emerald-500/40 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-500/70
           supports-[-moz-appearance:none]:[scrollbar-width:thin] supports-[-moz-appearance:none]:[scrollbar-color:#10b98166_transparent]"
       >
-        <div className="relative" style={{ width: WIDTH, height: H }}>
-          {/* heading for the first track */}
+        <div className="relative" style={{ width, height: H }}>
           <div className="absolute top-0" style={{ left: labels[0].x - 60 }}>
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">Start here</p>
             <p className="text-lg font-bold">{labels[0].name}</p>
             <p className="text-xs text-slate-400">{labels[0].done} of {labels[0].total} complete</p>
           </div>
 
-          {/* "Next section" dividers between tracks */}
           {dividers.map((d) => (
             <div key={d.id} className="pointer-events-none">
               {d.tiles.map((x) => (
@@ -129,7 +144,6 @@ export default function Roadmap({ go, setProgress }) {
             </div>
           ))}
 
-          {/* floor tiles sit behind every lesson tile */}
           {items.map((s) => (
             <div key={s.key} className="absolute rounded-[28px]" style={{ ...floorTile, left: s.x, top: rowTop(s.off), background: s.floor }} />
           ))}
@@ -138,9 +152,15 @@ export default function Roadmap({ go, setProgress }) {
             const Icon = ICONS[s.icon]
             const c = STYLE[s.status]
             const tipAbove = s.off > 0
+            const linked = isLinked(s)
+            const label = linked ? c.label : 'Coming soon'
             return (
-              <button key={s.key} onClick={() => go(s.go)} aria-label={`${s.title}. ${c.label}.`}
-                className="group absolute z-10 outline-none hover:z-30 focus-visible:z-30"
+              <button
+                key={s.key}
+                onClick={() => linked && go(s.go, { lessonId: s.lessonId })}
+                aria-disabled={!linked}
+                aria-label={`${s.title}. ${label}.`}
+                className={`group absolute z-10 outline-none hover:z-30 focus-visible:z-30 ${linked ? '' : 'cursor-not-allowed'}`}
                 style={{ left: s.x, top: rowTop(s.off), width: SIZE * 1.42, height: 70, transform: 'translate(-50%,-50%)' }}>
                 <span className="absolute inset-0 block transition-transform duration-150 group-hover:-translate-y-1 group-focus-visible:-translate-y-1">
                   <span className="absolute left-1/2 top-1/2 block rounded-[18px]" style={{ ...diamond, background: c.edge, marginTop: 11 }} />
@@ -152,7 +172,6 @@ export default function Roadmap({ go, setProgress }) {
                   {s.status === 'current' && (
                     <>
                       <span className="absolute right-4 top-1 size-3 animate-pulse rounded-full bg-lime-300" />
-                      {/* always-visible "Next" pill, hides while the hover bubble is open */}
                       <span className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 rounded-lg bg-white px-3 py-1 text-sm font-extrabold text-[#1f201c] shadow-lg transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0 after:absolute after:left-1/2 after:top-full after:size-2.5 after:-translate-x-1/2 after:-translate-y-1/2 after:rotate-45 after:bg-white after:content-['']">
                         Next
                       </span>
@@ -163,7 +182,7 @@ export default function Roadmap({ go, setProgress }) {
                   className={`pointer-events-none absolute left-1/2 w-56 -translate-x-1/2 rounded-xl bg-white px-4 py-3 text-left text-[#1f201c] opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${tipAbove ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
                   <span className="block text-sm font-bold">{s.title}</span>
                   <span className="mt-0.5 block text-sm leading-snug">{s.text}</span>
-                  <span className="mt-1.5 block text-xs font-semibold text-emerald-700">{c.label}</span>
+                  <span className="mt-1.5 block text-xs font-semibold text-emerald-700">{label}</span>
                 </span>
               </button>
             )
