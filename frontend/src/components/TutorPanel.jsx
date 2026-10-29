@@ -15,7 +15,10 @@ export default function TutorPanel({ onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       })
-      if (!res.ok) throw new Error(`Request failed (${res.status})`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `Request failed (${res.status})`)
+      }
       const data = await res.json()
       setReply(data.reply)
     } catch (err) {
