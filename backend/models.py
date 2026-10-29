@@ -104,16 +104,21 @@ class QuizAttempt(Base):
 
 class Lab(Base):
     __tablename__ = "labs"
+    __table_args__ = (UniqueConstraint("lesson_id", "section_slug"),)  # one lab per section
 
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"))
+    section_slug: Mapped[str] = mapped_column(String(120))  # matches a section slug in lesson.content
     title: Mapped[str] = mapped_column(String(200))
     difficulty: Mapped[str] = mapped_column(String(20), default="beginner")
-    estimated_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    estimated_minutes: Mapped[int] = mapped_column(Integer, default=10)
     instructions: Mapped[str] = mapped_column(Text)  # markdown
     starter_code: Mapped[str] = mapped_column(Text, default="")
-    solution_code: Mapped[str] = mapped_column(Text, default="")  # never exposed in LabOut
+    solution_code: Mapped[str] = mapped_column(Text, default="")        # never sent to the client
+    expected_output: Mapped[str] = mapped_column(Text, default="")      # never sent to the client
+    required_code: Mapped[list] = mapped_column(JSON, default=list)     # substrings the code must contain
+    forbidden_code: Mapped[list] = mapped_column(JSON, default=list)    # substrings the code must not contain
     hints: Mapped[list] = mapped_column(JSON, default=list)
     order: Mapped[int] = mapped_column(Integer, default=0)
 
